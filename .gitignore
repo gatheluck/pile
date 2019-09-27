@@ -1,0 +1,5 @@
+data/*
+!data/*.sh
+logs
+__pycache__
+.vscode
