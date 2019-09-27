@@ -30,6 +30,50 @@ class PGDAttack(AttackWrapper):
 
 		self.criterion = nn.CrossEntropyLoss().cuda()
 
+	def _run_one(self, pixel_model, pixel_inp, delta, target, eps, step_size, avoid_target=True):
+		s = pixel_model(pixel_inp + delta)
+
+		for it in range(self.nb_its):
+			loss = self.criterion(s, target)
+			loss.backward()
+			'''
+			Because of batching, this grad is scaled down by 1 / batch_size, which does not matter
+			for what follows because of normalization.
+			'''
+			if avoid_target:
+				# to avoid the target, we increase the loss.
+				grad = delta.grad.data
+			else:
+				# to hit the target, we reduce the loss.
+				grad = -delta.grad.data
+
+			if self.norm == 'linf':
+				grad_sign = grad.sign()
+				delta.data = delta.data + step_size[:,None,None,None]*grad_sign
+				delta.data = torch.max(torch.min(delta.data, eps[:,None,None,None]),-eps[:,None,None,None])
+				delta.data = torch.clamp(pixel_inp.data + delta.data, 0., 255.) - pixel_inp.data
+			else:
+				raise NotImplementedError
+
+			if it != self.nb_its-1:
+				s = pixel_model(pixel_inp+delta)
+				delta.grad.data.zero_()
+		return delta
+
+	def _init(self, shape, eps):
+		if self.rand_init:
+			if self.norm == 'linf':
+				init = torch.rand(shape, dtype=torch.float32, device='cuda')*2-1
+			else:
+				raise NotImplementedError
+
+			init = eps[:,None,None,None] * init
+			init.requires_grad_()
+			return init
+		else:
+			# disable random init (same as Basic Iterative Method)
+			return torch.zeros(shape, requires_grad=True, device='cuda')
+
 	def _forward(self, pixel_model, pixel_img, target, avoid_target=True, scale_eps=False):
 		# compute base_eps and step_size
 		if scale_eps:
