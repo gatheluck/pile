@@ -338,7 +338,7 @@ def validate(val_loader, model, criterion, args):
 		print(' * Acc@1 {top1.avg:.3f} Acc@5 {top5.avg:.3f}'
 					.format(top1=top1, top5=top5))
 
-  return top1.avg
+	return top1.avg
 
 
 def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
